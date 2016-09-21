@@ -34,8 +34,8 @@ void * smrcAllocate(StorageManager *pMgr
 	}
 
 	//NEEDS WORK HERE
-	//void *pUserData = ((char)pAlloc) + 3*sizeof(short);
-	return pAlloc;
+	void *pUserData = ((char *)pAlloc) + 3*sizeof(short);
+	return pUserData;
 	//return ((char)pAlloc) + 3*sizeof(short);
 
 }
@@ -51,7 +51,7 @@ void smrcRemoveRef(StorageManager *pMgr
 	//gets the actual node's start point, not the userdata point
 	//AllocNode *pAlloc = (AllocNode *)(((char *)pUserData) - 3 * sizeof(short));
 	AllocNode *pAlloc = getNode(pUserData);
-
+	printf("--\t--DEBUG--\t--\n--\t--USERNODE GAINED--\t--\n");
 	//decrements reference count of allocnode
 	pAlloc->shRefCount--;
 
@@ -80,9 +80,11 @@ void smrcAssoc(StorageManager *pMgr
 		psmResult->rc = 801;
 	}
 	if(pUserDataFrom != NULL){
+		printf("--\t--DEBUG--\t--\n--\t--REMREF--\t--\n");
 		smrcRemoveRef(pMgr, pUserDataFrom, psmResult);
 	}
 	if(pUserDataTo != NULL){
+		printf("--\t--DEBUG--\t--\n--\t--ADDREF--\t--\n");
 		smrcAddRef(pMgr, pUserDataTo, psmResult);
 	}
 	pUserDataFrom = pUserDataTo;
@@ -101,6 +103,7 @@ void printNode(StorageManager *pMgr, void *pUserData){
 		printf("\tAlloc Address\tSize\tNode Type\tRef Cnt\tData Address\n");
 		printf("\t%x\t\t%d\t%d\t\t%d\t%x\n",node,node->shAllocSize,
 			node->shNodeType,node->shRefCount,pUserData);
+		printf("\t\tAttr Name\tType\tValue\n");
 }
 
 AllocNode * getNode(void *pUserData){
