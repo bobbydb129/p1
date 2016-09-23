@@ -4,11 +4,10 @@
 #include "cs3723p1.h"
 
 AllocNode * getNode(void *pUserData);
+int checkPoint(void *point); 
 
 void * smrcAllocate(StorageManager *pMgr
     , short shDataSize, short shNodeType, char sbData[], SMResult *psmResult){
-
-	//printf("HELLO");
 
 	int count;
 
@@ -25,33 +24,24 @@ void * smrcAllocate(StorageManager *pMgr
 
 	//initializes AllocNode
 	pAlloc->shAllocSize = totalSize;
-	//printf("\nDEBUG - ALLOC SIZE %d  %d\n", totalSize, pAlloc->shAllocSize);
 	pAlloc->shRefCount = 1;
 	pAlloc->shNodeType = shNodeType;
-	
 	for(count = 0; count < shDataSize; count++){
 		pAlloc->sbData[count] = sbData[count];
 	}
 
-	//NEEDS WORK HERE
 	void *pUserData = ((char *)pAlloc) + 3*sizeof(short);
 	return pUserData;
-	//return ((char)pAlloc) + 3*sizeof(short);
-
 }
 void smrcRemoveRef(StorageManager *pMgr
     , void *pUserData, SMResult *psmResult){
-
-	//printf("HELLO1");
 
 	int iAt;                        // control variable representing subscript in metaAttrM
 	MetaAttr *pAttr;                // slightly simplifies referencing item in metaAttrM
 	void **ppNode;                  // pointer into user data if this attribute is a pointer
 
 	//gets the actual node's start point, not the userdata point
-	//AllocNode *pAlloc = (AllocNode *)(((char *)pUserData) - 3 * sizeof(short));
 	AllocNode *pAlloc = getNode(pUserData);
-	printf("--\t--DEBUG--\t--\n--\t--USERNODE GAINED--\t--\n");
 	//decrements reference count of allocnode
 	pAlloc->shRefCount--;
 
@@ -63,10 +53,10 @@ void smrcRemoveRef(StorageManager *pMgr
 			pAttr = &(pMgr->metaAttrM[iAt]);
 			if(pAttr->cDataType == 'P'){
 				ppNode = (void **) &(pAlloc->sbData[pAttr->shOffset]);
-				/*if(ppNode == NULL){
-					return;
-				}*/
-				smrcRemoveRef(pMgr, *ppNode, psmResult);
+					if(*ppNode != NULL)
+				{
+					smrcRemoveRef(pMgr,*ppNode,psmResult);
+				}
 			}
 		}
 		smFree(pMgr, pUserData, psmResult);
@@ -75,35 +65,87 @@ void smrcRemoveRef(StorageManager *pMgr
 void smrcAssoc(StorageManager *pMgr
     , void *pUserDataFrom, char szAttrName[], void *pUserDataTo, SMResult *psmResult){
 
-	//printf("HELLO2");
-	if(strcmp(szAttrName, "P")){
-		psmResult->rc = 801;
+	//printf("---FROM------------------------------------------------\n");
+	//printNode(pMgr,pUserDataFrom);
+	//printf("---TO--------------------------------------------------\n");
+	//printNode(pMgr,pUserDataTo);
+
+	//printf("szAttrName: %s\n", szAttrName);
+	AllocNode *pNodeFrom = getNode(pUserDataFrom);
+	int iAt;                        // control variable representing subscript in metaAttrM
+	MetaAttr *pAttr;                // slightly simplifies referencing item in metaAttrM
+	void **ppNode;                  // pointer into user data if this attribute is a pointer
+
+
+	for(iAt = pMgr->nodeTypeM[pNodeFrom->shNodeType].shBeginMetaAttr; pMgr->metaAttrM[iAt].shNodeType == pNodeFrom->shNodeType; iAt++)
+	{
+		pAttr = &(pMgr->metaAttrM[iAt]);
+		if(strcmp(szAttrName,pAttr->szAttrName) == 0){
+			//printf("MATCH FOUND: %s %c\n",pAttr->szAttrName,pAttr->cDataType);
+			if(pAttr->cDataType != 'P'){
+				psmResult->rc = 801;
+				return;
+			}
+			ppNode = (void **) &(pNodeFrom->sbData[pAttr->shOffset]);
+			if(*ppNode != NULL)
+			{
+				smrcRemoveRef(pMgr,*ppNode,psmResult);
+			}
+			*ppNode = pUserDataTo;
+			if(*ppNode != NULL){
+				smrcAddRef(pMgr,*ppNode,psmResult);
+			}
+		}
 	}
-	if(pUserDataFrom != NULL){
-		printf("--\t--DEBUG--\t--\n--\t--REMREF--\t--\n");
-		smrcRemoveRef(pMgr, pUserDataFrom, psmResult);
-	}
-	if(pUserDataTo != NULL){
-		printf("--\t--DEBUG--\t--\n--\t--ADDREF--\t--\n");
-		smrcAddRef(pMgr, pUserDataTo, psmResult);
-	}
-	pUserDataFrom = pUserDataTo;
+
+
 
 }
 void smrcAddRef(StorageManager *pMgr
     , void *pUserDataTo, SMResult *psmResult){
-	//printf("HELLO3");
 
 	AllocNode *node = getNode(pUserDataTo);
 	node->shRefCount++;
 }
 
 void printNode(StorageManager *pMgr, void *pUserData){
-		AllocNode *node = getNode(pUserData);
+		AllocNode *pAlloc = getNode(pUserData);
+		int iAt;                        // control variable representing subscript in metaAttrM
+		MetaAttr *pAttr;                // slightly simplifies referencing item in metaAttrM
+		char *pszMemAtOffset;           // pointer into user data if this attribute is a string
+	    int *piMemAtOffset;             // pointer into user data if this attribute is an int
+	    void **ppNode;                  // pointer into user data if this attribute is a pointer
+	    double *pdMemAtOffset;          // pointer into user data if this attribute is a double
+
 		printf("\tAlloc Address\tSize\tNode Type\tRef Cnt\tData Address\n");
-		printf("\t%x\t\t%d\t%d\t\t%d\t%x\n",node,node->shAllocSize,
-			node->shNodeType,node->shRefCount,pUserData);
+		printf("\t%p\t\t%d\t\t%d\t\t\t%d\t\t%p\n",pAlloc,pAlloc->shAllocSize,
+			pAlloc->shNodeType,pAlloc->shRefCount,pUserData);
 		printf("\t\tAttr Name\tType\tValue\n");
+
+		for(iAt = pMgr->nodeTypeM[pAlloc->shNodeType].shBeginMetaAttr; pMgr->metaAttrM[iAt].shNodeType == pAlloc->shNodeType; iAt++)
+		{
+			pAttr = &(pMgr->metaAttrM[iAt]);
+			printf("\t\t%-10s", pAttr->szAttrName);
+			switch(pAttr->cDataType)
+			{
+				case 'P':
+					ppNode = (void **) &(pAlloc->sbData[pAttr->shOffset]);
+					printf("\tP\t\t%p\n",*ppNode);
+					break;
+				case 'S':
+					pszMemAtOffset = (char *) &(pAlloc->sbData[pAttr->shOffset]);
+					printf("\tS\t\t%s\n",pszMemAtOffset);
+					break;
+				case 'I':
+					piMemAtOffset = (int *) &(pAlloc->sbData[pAttr->shOffset]);
+					printf("\tI\t\t%d\n",*piMemAtOffset);
+					break;
+				case 'D':
+					pdMemAtOffset = (double *) &(pAlloc->sbData[pAttr->shOffset]);
+					printf("\tD\t\t%f\n",*pdMemAtOffset);
+					break;
+			}
+		}
 }
 
 AllocNode * getNode(void *pUserData){
